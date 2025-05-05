@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minesweeper</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+        }
+        table { 
+            border-collapse: collapse; 
+            margin-top: 20px;
+        }
+        td {
+            width: 30px;
+            height: 30px;
+            text-align: center;
+            border: 1px solid #999;
+            font-size: 18px;
+            background-color: #ccc;
+            cursor: pointer;
+        }
+        td.revealed {
+            background-color: #eee;
+            cursor: default;
+        }
+        td.flagged {
+            background-color: #f0e68c;
+        }
+        .message {
+            font-size: 20px;
+            color: green;
+            margin-top: 20px;
+        }
+        .difficulty-select {
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Minesweeper</h1>
+    <div class="difficulty-select">
+        <label for="difficulty">Select Difficulty: </label>
+        <select id="difficulty" onchange="changeDifficulty()">
+            <option value="easy">Easy</option>
+            <option value="medium">Medium</option>
+            <option value="hard">Hard</option>
+        </select>
+    </div>
+
+    <table id="board"></table>
+    <div id="message" class="message"></div>
+
+    <script>
+        const size = {{ size }};
+        const board = document.getElementById("board");
+        const message = document.getElementById("message");
+
+        let flaggedBoard = Array(size).fill().map(() => Array(size).fill(false));
+
+        function createBoard() {
+            for (let r = 0; r < size; r++) {
+                const row = board.insertRow();
+                for (let c = 0; c < size; c++) {
+                    const cell = row.insertCell();
+                    cell.dataset.row = r;
+                    cell.dataset.col = c;
+                    cell.addEventListener('click', () => reveal(r, c));
+                    cell.addEventListener('contextmenu', (e) => flagCell(e, r, c));  // Right-click to flag
+                }
+            }
+        }
+
+        function changeDifficulty() {
+            const difficulty = document.getElementById('difficulty').value;
+            window.location.href = `/?difficulty=${difficulty}`;
+        }
+
+        function reveal(row, col) {
+            fetch('/reveal', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ row, col })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.mine) {
+                    alert('💥 You hit a mine!');
+                    location.reload();
+                    return;
+                }
+
+                if (data.won) {
+                    message.textContent = '🎉 You won the game!';
+                    location.reload();
+                    return;
+                }
+
+                updateBoard(data.board, data.values);
+            });
+        }
+
+        function flagCell(e, row, col) {
+            e.preventDefault();  // Prevent the default right-click menu
+
+            // Toggle the flag on the clicked cell
+            flaggedBoard[row][col] = !flaggedBoard[row][col];
+
+            // Send the flag change to the server
+            fetch('/flag', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ row, col })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.won) {
+                    message.textContent = '🎉 You won the game!';
+                    location.reload();
+                    return;
+                }
+                updateBoard(data.board, data.values);
+            });
+        }
+
+        function updateBoard(visible, values) {
+            for (let r = 0; r < size; r++) {
+                for (let c = 0; c < size; c++) {
+                    const cell = board.rows[r].cells[c];
+                    if (visible[r][c]) {
+                        cell.classList.add('revealed');
+                        const value = values[r][c];
+                        cell.textContent = value === ' ' ? '' : value;
+                        cell.style.cursor = 'default';
+                    } else if (flaggedBoard[r][c]) {
+                        cell.classList.add('flagged');
+                        cell.textContent = '🚩';  // Display a flag
+                    }
+                }
+            }
+        }
+
+        createBoard();
+    </script>
+
+</body>
+</html>
